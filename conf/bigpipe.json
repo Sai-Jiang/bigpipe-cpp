@@ -1,0 +1,25 @@
+{
+  "log.level": 5,
+  "log.directory": "./logs",
+
+  "kafka.bootstrap.servers": "localhost:9092",
+  "kafka.topics": [
+    {"name": "test", "partitions": 3}
+  ],
+
+  "kafka.producer.retries": 2,
+  "kafka.producer.acl": [
+    {"name": "system-1", "secret": "you are good", "topic": "test"},
+    {"name": "system-2", "secret": "you are bad", "topic": "test"}
+  ],
+
+  "kafka.consumer.list": [
+    {"topic": "test", "groupId": "G1", "rateLimit": 100, "timeout": 3000, "retries": 2, "concurrency": 5},
+    {"topic": "test", "groupId": "G2", "rateLimit": 100, "timeout": 3000, "retries": 2, "concurrency": 5}
+  ],
+
+  "http.server.port": 10086,
+  "http.server.handler.channel.size": 500000,
+  "http.server.read.timeout": 5000,
+  "http.server.write.timeout": 5000
+}
