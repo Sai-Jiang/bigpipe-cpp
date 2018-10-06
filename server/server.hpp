@@ -2,11 +2,14 @@
 
 #include <memory>
 #include <string>
+#include <atomic>
 #include <served/served.hpp>
 #include <boost/lockfree/queue.hpp>
-#include "../proto/reqmsg.hpp"
-#include "../config/config.h"
 #include "acceptor.hpp"
+#include "../proto/reqmsg.hpp"
+#include "../config/config.hpp"
+#include "../kafka/producer.hpp"
+#include "../config/config.hpp"
 
 class Server {
 public:
@@ -19,31 +22,18 @@ public:
 
 private:
     void RpcCallback(served::response &resp, const served::request &req);
+    void ForwardingTask();
+    int CalcPartition(int partitions, const std::string &partitionKey);
 
 private:
+    typedef boost::lockfree::queue<RequestMessage, boost::lockfree::fixed_sized<true>> FixedSizeChannel;
+
+    std::atomic<bool> IsRunning;
+
+    std::unique_ptr<Config> bigConf;
     std::unique_ptr<Acceptor> acceptor;
-    boost::lockfree::queue<RequestMessage> taskchan;
-    std::vector<std::thread> threads;
+    std::unique_ptr<FixedSizeChannel> taskchan;
+    std::vector<std::thread> forwarders;
+
+    std::unique_ptr<KafkaProducerWrapper> kafkaProducer;
 };
-
-bool Server::Init(Config *bigConf) {
-    if (!bigConf) return false;
-
-    served::multiplexer mux;
-    mux.handle("/rpc/call").get(std::bind(&Server::RpcCallback, this, std::placeholders::_1, std::placeholders::_2));
-
-    acceptor = std::make_unique<Acceptor>(std::string("0.0.0.0"), std::to_string(bigConf->Http_server_port),
-            bigConf->Http_server_read_timeout, bigConf->Http_server_write_timeout, mux);
-
-    return true;
-}
-
-bool Server::Stop() {
-    acceptor->Stop();
-}
-
-bool Server::Start(int threadnum) {
-
-    acceptor->Run();
-}
-

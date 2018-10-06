@@ -1,8 +1,8 @@
 #pragma once
 
-#include <map>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <folly/json.h>
 #include <folly/dynamic.h>
 #include "reqbody.hpp"
@@ -10,7 +10,9 @@
 struct RequestMessage {
 public:
     RequestMessage() = default;
-    RequestMessage(std::map<std::string, std::string> headers, RequestBody reqbody) : headers(headers) {
+    RequestMessage(std::unordered_map<std::string, std::string> headers, RequestBody reqbody) : headers(headers) {
+        topic = reqbody.GetACL().GetTopic();
+        partitionKey = reqbody.GetPartitionKey();
         url = reqbody.GetURL();
         data = reqbody.GetData();
     }
@@ -21,17 +23,20 @@ public:
 
 public:
     void SetURL(std::string url) { url = url; }
-    void SetPartition(int partition) { partition = partition; }
     void SetData(std::string data) { data = data; }
     void SetHTTPHeaders(std::map<std::string, std::string> headers) { headers = headers; }
 
 public:
-    std::map<std::string, std::string> GetHTTPHeaders() { return headers; }
+    std::unordered_map<std::string, std::string> GetHTTPHeaders() { return headers; }
     std::string GetURL() { return url; }
     std::string GetData(std::string data) { return data; }
+    std::string GetTopic() { return topic; }
+    std::string GetPartitionKey() { return partitionKey; }
 
 private:
-    std::map<std::string, std::string> headers;
+    std::unordered_map<std::string, std::string> headers;
+    std::string partitionKey;
+    std::string topic;
     std::string url;
     std::string data;
 };
@@ -51,12 +56,14 @@ bool RequestMessage::FromJSON(std::string json) {
 
 std::string RequestMessage::ToJSON() {
     folly::dynamic obj = folly::dynamic::object;
-    obj["headers"] = folly::dynamic::object;
 
+    obj["headers"] = folly::dynamic::object;
     for (auto &header : headers)
         obj["headers"][header.first] = header.second;
+
     obj["url"] = url;
     obj["data"] = data;
+    obj["topic"] = topic;
 
     return folly::toJson(obj);
 }
