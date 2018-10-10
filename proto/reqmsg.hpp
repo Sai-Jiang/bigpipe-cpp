@@ -5,9 +5,11 @@
 #include <unordered_map>
 #include <folly/json.h>
 #include <folly/dynamic.h>
+#include <boost/lockfree/queue.hpp>
 #include "reqbody.hpp"
 
-struct RequestMessage {
+
+class RequestMessage {
 public:
     RequestMessage() = default;
     RequestMessage(std::unordered_map<std::string, std::string> headers, RequestBody reqbody) : headers(headers) {
@@ -29,7 +31,7 @@ public:
 public:
     std::unordered_map<std::string, std::string> GetHTTPHeaders() { return headers; }
     std::string GetURL() { return url; }
-    std::string GetData(std::string data) { return data; }
+    std::string GetData() { return data; }
     std::string GetTopic() { return topic; }
     std::string GetPartitionKey() { return partitionKey; }
 
@@ -40,6 +42,8 @@ private:
     std::string url;
     std::string data;
 };
+
+typedef boost::lockfree::queue<RequestMessage, boost::lockfree::fixed_sized<true>> FixedSizeTaskChan;
 
 bool RequestMessage::FromJSON(std::string json) {
     std::ifstream ifs(json);

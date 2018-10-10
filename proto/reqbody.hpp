@@ -11,7 +11,7 @@
 
 class RequestBody {
 public:
-//    RequestBody() = default;
+    RequestBody() = default;
 
 public:
     bool ParseFromJSON(std::string json);

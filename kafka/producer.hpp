@@ -1,50 +1,65 @@
 #pragma once
 
-#include <string>
+#include <vector>
 #include <thread>
-#include <functional>
 #include <random>
 #include <cppkafka/cppkafka.h>
 #include "../proto/reqmsg.hpp"
 #include "../config/config.hpp"
 
-class KafkaProducerWrapper {
+class KafkaProducer {
 public:
-    KafkaProducerWrapper() : conf(new cppkafka::Configuration), IsRunning(false) {}
-    ~KafkaProducerWrapper() = default;
-
-public:
-    void SetBootstrapServer(std::string server) { conf->set("bootstrap.servers", server); };
-    void SetRetries(int retries) { conf->set("retries", retries); };
+    KafkaProducer() = default;
 
 public:
     bool Start();
-    bool Stop();
-
-public:
-    void SendMessage(std::string topic, int partition, RequestMessage &message);
 
 private:
-    std::unique_ptr<cppkafka::Configuration> conf;
-    std::unique_ptr<cppkafka::Producer> client;
+    int CalcPartition(int partitions, const std::string &partitionKey);
+    void Pushing();
+
+private:
+    Config *bigConf;
     std::atomic<bool> IsRunning;
+    cppkafka::Producer kafkaClient;
+    std::shared_ptr<FixedSizeTaskChan> taskchan;
+    std::vector<std::thread> producers;
+    std::string kafkaServer;
+    int retries;
 };
 
-bool KafkaProducerWrapper::Start() {
-    client = std::make_unique<cppkafka::Producer>(*conf);
-    IsRunning = true;
-    return true;
+int KafkaProducer::CalcPartition(int partitions, const std::string &partitionKey) {
+    if (partitionKey.empty()) {
+        std::random_device rd;
+        return rd() % partitions;
+    }
+    std::hash<std::string> StrHash;
+    return (int)StrHash(partitionKey) % partitions;
 }
 
-bool KafkaProducerWrapper::Stop() {
-    while (client->get_out_queue_length() > 0)
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    IsRunning = false;
-    return true;
+void KafkaProducer::Pushing() {
+    while (IsRunning) {
+        RequestMessage reqmsg;
+        bool isok = taskchan->pop(reqmsg);    // may stall, sending one fake message each forwarder
+        if (!isok) continue;                  // check again
+        std::string topic = reqmsg.GetTopic();
+        int partition = CalcPartition(bigConf->Kafka_topics[topic].Partitions, reqmsg.GetPartitionKey());
+        std::string payload = reqmsg.ToJSON();
+        kafkaClient.produce(cppkafka::MessageBuilder(topic).partition(partition).payload(payload));
+        kafkaClient.flush();
+    }
 }
 
-void KafkaProducerWrapper::SendMessage(std::string topic, int partition, RequestMessage &message) {
-    auto payload = message.ToJSON();
-    client->produce(cppkafka::MessageBuilder(topic).partition(partition).payload(payload));
-    client->flush();
+bool KafkaProducer::Start() {
+//    cppkafka::Configuration conf;
+//    conf.set("bootstrap.servers", kafkaServer);
+//    conf.set("retries", retries);
+//    cppkafka::Producer producer(conf);
+
+
+    for (int i = 0; i < std::thread::hardware_concurrency(); i++) {
+        std::thread producer;
+
+    }
+
 }

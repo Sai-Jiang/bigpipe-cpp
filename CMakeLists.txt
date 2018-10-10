@@ -10,5 +10,5 @@ include_directories(${Folly_Dir}/include ${Glog_Dir}/include ${Gflags_Dir}/inclu
 link_directories(${Folly_Dir}/lib ${Glog_Dir}/lib ${Gflags_Dir}/lib)
 link_libraries(folly glog gflags)
 
-add_executable(bigpipe_cpp main.cpp client/rate_limit.h client/client.h proto/reqmsg.hpp config/config.h server/server.cpp server/server.hpp kafka/producer.hpp kafka/producer.cpp kafka/consumer.h kafka/consumer.c server/acceptor.hpp proto/reqbody.hpp proto/acl.hpp proto/callstatus.hpp proto/callresponse.hpp)
+add_executable(bigpipe_cpp main.cpp client/rate_limit.h client/iclient.hpp proto/reqmsg.hpp config/config.hpp acceptor/acceptor.cpp acceptor/acceptor.hpp kafka/producer.hpp proto/reqbody.hpp proto/acl.hpp proto/callresp.hpp client/async_client.hpp client/circuit_breaker.hpp client/healthStats.hpp kafka/consumer.hpp)
 target_link_libraries(bigpipe_cpp folly glog gflags served boost_system)

@@ -11,6 +11,8 @@ public:
     TokenBucket(double rate) : lastFillTime(std::chrono::steady_clock::now()), tokenPerMicroSecond(rate / 1e6),
                                 tokenCount(rate), capacity(rate) {
     }
+
+public:
     void GetToken(int count) {
         std::lock_guard<std::mutex> lock(mutex);
 
@@ -25,6 +27,7 @@ public:
         std::this_thread::sleep_for(std::chrono::milliseconds(waittime));
         tokenCount = 0;
     }
+
 private:
     void tryFillBucket() {
         auto now = std::chrono::steady_clock::now();
@@ -33,6 +36,7 @@ private:
         tokenCount = std::max(passedMs * tokenPerMicroSecond + tokenCount, capacity);
         lastFillTime = now;
     }
+
 private:
     std::chrono::steady_clock::time_point lastFillTime;	// 上一次填充时间
     double tokenPerMicroSecond;	 	                    // 每us填充的令牌个数

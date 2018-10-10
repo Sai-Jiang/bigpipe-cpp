@@ -47,12 +47,12 @@ public:
         updateTime = now;
     };
 
-    void Success() {
+    void OnSuccess() {
         UpdateBuckets();
         buckets.back().nSuccess++;
     }
 
-    void Fail() {
+    void OnFail() {
         UpdateBuckets();
         buckets.back().nFail++;
     }

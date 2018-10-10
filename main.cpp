@@ -1,9 +1,10 @@
 #include <iostream>
 #include <glog/logging.h>
 #include <gflags/gflags.h>
+#include "acceptor/acceptor.hpp"
 #include "config/config.hpp"
 
-DEFINE_string(configFile, "./conf/bigpipe.json", "abs path to bigpipe.json");
+DEFINE_string(configFile, "./conf/bigpipe.json", "absolute path to bigpipe.json");
 
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -15,10 +16,15 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    LOG(INFO) << "[热重启]暂停handler" << std::endl;
+    Acceptor acceptor;
+    acceptor.Init(config);
+
+
+    acceptor.Start();
 
 
 
+    acceptor.Stop();
 
 
 

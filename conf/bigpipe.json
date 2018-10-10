@@ -4,7 +4,7 @@
 
   "kafka.bootstrap.servers": "localhost:9092",
   "kafka.topics": [
-    {"name": "test", "partitions": 3}
+    {"name": "test", "partitions": 1}
   ],
 
   "kafka.producer.retries": 2,
