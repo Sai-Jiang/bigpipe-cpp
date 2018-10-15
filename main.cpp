@@ -3,6 +3,8 @@
 #include <gflags/gflags.h>
 #include "acceptor/acceptor.hpp"
 #include "kafka/producer.hpp"
+#include "kafka/consumer.hpp"
+#include "base/SignalHandler.hpp"
 #include "config/config.hpp"
 
 DEFINE_string(configFile, "./conf/bigpipe.json", "absolute path to bigpipe.json");
@@ -30,6 +32,9 @@ int main(int argc, char *argv[]) {
     consumer.Start();
     producer.Start();
     acceptor.Start();
+
+    SignalHandler::hookSIGINT();
+    SignalHandler::waitForUserInterrupt();
 
     acceptor.Stop();
     producer.Stop();
