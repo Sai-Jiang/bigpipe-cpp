@@ -43,8 +43,6 @@ private:
     std::string data;
 };
 
-typedef boost::lockfree::queue<RequestMessage, boost::lockfree::fixed_sized<true>> FixedSizeTaskChan;
-
 bool RequestMessage::FromJSON(std::string json) {
     std::ifstream ifs(json);
     std::string content{std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>()};

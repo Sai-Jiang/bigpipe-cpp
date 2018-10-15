@@ -7,8 +7,8 @@
 #include <unordered_map>
 #include <glog/logging.h>
 #include <folly/json.h>
-#include "../kafka/consumer.hpp"
 #include "../proto/acl.hpp"
+#include "../kafka/consumer.hpp"
 
 struct KafkaTopicAttr {
     int Partitions;
@@ -16,7 +16,7 @@ struct KafkaTopicAttr {
 
 struct Config {
 public:
-    static Config *ParseConfig(std::string path);
+    static std::unique_ptr<Config> ParseConfig(std::string path);
 private:
     Config() = default;
 
@@ -38,13 +38,13 @@ public:
     int Http_server_handler_channel_size;
 };
 
-Config *Config::ParseConfig(std::string path) {
+std::unique_ptr<Config> Config::ParseConfig(std::string path) {
     std::ifstream ifs(path);
     std::string content{std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>()};
 
     folly::dynamic dict = folly::parseJson(content);
 
-    Config *config = new Config;
+    std::unique_ptr<Config> config(new Config);
 
     try {
         config->Log_directory = dict["log.directory"].asString();
@@ -61,17 +61,16 @@ Config *Config::ParseConfig(std::string path) {
         for (auto topicMap : dict["kafka.topics"]) {
             std::string name = topicMap["name"].asString();
             int partitions = int(topicMap["partitions"].asInt());
-            config->Kafka_topics[name] = KafkaTopicAttr{Partitions: partitions};
+            config->Kafka_topics[name] = KafkaTopicAttr{.Partitions = partitions};
         }
 
-        for (auto aclMap : dict["kafka.producer.acl"]) {
+        for (auto &aclMap : dict["kafka.producer.acl"]) {
             AccessControlList acl;
             acl.FromJSON(aclMap.asString());
             config->Kafka_producer_acl[acl.GetName()] = acl;
             if (config->Kafka_topics.count(acl.GetTopic()) == 0) {
                 LOG(WARNING) << ("ACL中配置的topic: " + acl.GetTopic() + " 不存在,请检查kafka.topics.") << std::endl;
-                delete(config);
-                return nullptr;
+                return std::unique_ptr<Config>(nullptr);
             }
         }
 
@@ -96,21 +95,18 @@ Config *Config::ParseConfig(std::string path) {
                         consumerConf.CircuiteBreakerConf->HealthRate <= 0 ||
                         consumerConf.CircuiteBreakerConf->HealthRate > 100) {
                     LOG(WARNING) << "consumer配置的熔断器参数有误, 请检查一下." << std::endl;
-                    delete(config);
-                    return nullptr;
+                    return std::unique_ptr<Config>(nullptr);
                 }
             }
             config->Kafka_consumer_list.push_back(consumerConf);
             if (config->Kafka_topics.count(consumerConf.Topic) == 0) {
                 LOG(WARNING) << ("consumer中配置的topic: ") << consumerConf.Topic << " 不存在,请检查kafka.topics." << std::endl;
-                delete(config);
-                return nullptr;
+                return std::unique_ptr<Config>(nullptr);
             }
         }
     } catch (std::exception & e) {
         LOG(ERROR) << e.what() << std::endl;
-        delete(config);
-        config = nullptr;
+        return std::unique_ptr<Config>(nullptr);
     }
 
     return config;

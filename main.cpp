@@ -2,6 +2,7 @@
 #include <glog/logging.h>
 #include <gflags/gflags.h>
 #include "acceptor/acceptor.hpp"
+#include "kafka/producer.hpp"
 #include "config/config.hpp"
 
 DEFINE_string(configFile, "./conf/bigpipe.json", "absolute path to bigpipe.json");
@@ -10,23 +11,29 @@ int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
-    auto config = Config::ParseConfig(FLAGS_configFile);
+    std::shared_ptr<Config> config = Config::ParseConfig(FLAGS_configFile);
     if (config == nullptr) {
-        LOG(ERROR) <<  "[热重启]解析配置失败" << std::endl;
+        LOG(ERROR) <<  "配置文件加载失败:" << FLAGS_configFile << std::endl;
         return -1;
     }
 
     Acceptor acceptor;
     acceptor.Init(config);
 
+    KafkaProducer producer;
+    producer.Init(config);
+    producer.SetJobChannel(acceptor.GetTaskChannel());
 
+    KafkaConsumer consumer;
+    consumer.Init(config);
+
+    consumer.Start();
+    producer.Start();
     acceptor.Start();
 
-
-
     acceptor.Stop();
-
-
+    producer.Stop();
+    consumer.Stop();
 
     google::ShutdownGoogleLogging();
     gflags::ShutDownCommandLineFlags();
