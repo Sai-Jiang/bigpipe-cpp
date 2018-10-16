@@ -12,41 +12,47 @@ using namespace web;
 using namespace web::http;
 using namespace web::http::client;
 
-class AsyncClient : public IClient {
+class AsyncClient {
 public:
-    void notifyCircuitBreaker(bool success) {
-        if (circuitBreaker) {
-            if (success) {
-                circuitBreaker->OnSuccess();
-            } else {
-                circuitBreaker->OnFail();
-            }
-        }
-    }
+    AsyncClient(int retries, int timeout) : retries(retries), timeout(timeout) {}
+    bool SetTokenBucket(double rate);
+    bool SetCircuitBreaker(const CircuitBreakerConf &conf);
 
-    void Call(RequestMessage *msg);
+public:
+    void Call(const RequestMessage &msg);
+    void notifyCircuitBreaker(bool success);
 
 private:
-    void CallWithRetry(RequestMessage *msg);
+    void CallWithRetry(const RequestMessage &msg);
 
 private:
     int retries;
     int timeout;
-    TokenBucket *rateLimit;
-    CircuitBreaker *circuitBreaker;
+    std::unique_ptr<TokenBucket> rateLimit;
+    std::unique_ptr<CircuitBreaker> circuitBreaker;
 };
 
-void AsyncClient::CallWithRetry(RequestMessage *msg) {
+bool AsyncClient::SetTokenBucket(double rate) {
+    rateLimit = std::make_unique<TokenBucket>(rate);
+    return true;
+}
+
+bool AsyncClient::SetCircuitBreaker(const CircuitBreakerConf &conf) {
+    circuitBreaker = std::make_unique<CircuitBreaker>(conf);
+    return true;
+}
+
+void AsyncClient::CallWithRetry(const RequestMessage &msg) {
     bool success = false;
 
     for (int i = 0; retries + 1; i++) {
-        http_client client(msg->GetURL());
+        http_client client(msg.GetURL());
 
         http_request request(methods::POST);
-        for (auto head : msg->GetHTTPHeaders())
+        for (auto head : msg.GetHTTPHeaders())
             request.headers().add(head.first, head.second);
         request.headers().add("Content-Type", "application/octet-stream");
-        request.headers().add("Content-Length", std::to_string(msg->GetData().size()));
+        request.headers().add("Content-Length", std::to_string(msg.GetData().size()));
 
         auto reqStartTime = std::chrono::steady_clock::now();
         http_response resp = client.request(request).get();
@@ -72,18 +78,19 @@ void AsyncClient::CallWithRetry(RequestMessage *msg) {
     }
 }
 
-void AsyncClient::Call(RequestMessage *msg) {
-    if (circuitBreaker) {
-        while (true) {
-
-        }
-    }
+void AsyncClient::Call(const RequestMessage &msg) {
 
     rateLimit->GetToken(1);
-
-
-
 }
 
+void AsyncClient::notifyCircuitBreaker(bool success) {
+    if (circuitBreaker) {
+        if (success) {
+            circuitBreaker->OnSuccess();
+        } else {
+            circuitBreaker->OnFail();
+        }
+    }
+}
 
 

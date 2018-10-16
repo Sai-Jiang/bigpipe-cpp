@@ -19,6 +19,7 @@ public:
     bool Start();
     bool Stop();
     void SetJobChannel(const std::shared_ptr<BoundedBlockingQueue<RequestMessage>>& taskchan);
+
 private:
     int CalcPartition(int partitions, const std::string &partitionKey);
     void Pushing();
@@ -44,7 +45,6 @@ void KafkaProducer::EventsHandler(cppkafka::Producer& producer, const cppkafka::
 
 bool KafkaProducer::Init(const std::shared_ptr<Config>& pConf) {
     bigConf = pConf;
-    IsRunning = false;
 
     cppkafka::Configuration conf;
     conf.set("bootstrap.servers", bigConf->Kafka_bootstrap_servers);
@@ -73,9 +73,10 @@ void KafkaProducer::Pushing() {
         RequestMessage reqmsg;
         reqmsg = taskchan->take();  // Fixme:  可能存在阻塞的问题，尤其是执行退出逻辑时；
         std::string topic = reqmsg.GetTopic();
+        if (topic == "") continue;
         int partition = CalcPartition(bigConf->Kafka_topics[topic].Partitions, reqmsg.GetPartitionKey());
         std::string payload = reqmsg.ToJSON();
-        kafkaClient->produce(cppkafka::MessageBuilder(topic).partition(partition).payload(payload));
+        kafkaClient->produce(cppkafka::MessageBuilder(topic).partition(partition).payload(payload)); // thread-safe
     }
 }
 
@@ -93,8 +94,10 @@ bool KafkaProducer::Start() {
 
 bool KafkaProducer::Stop() {
     IsRunning = false;
-    for (int i = 0; i < NPRODUCERS; i++)
+    for (int i = 0; i < NPRODUCERS; i++) {
+        taskchan->put(RequestMessage());    // Empty RequestMessage() for exit notification
         producers[i].join();
+    }
     while (kafkaClient->get_out_queue_length() > 0) {
         LOG(INFO) << "Stopping KafkaProducer: flushing Kafka" << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(1));

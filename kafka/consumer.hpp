@@ -7,6 +7,7 @@
 #include <glog/logging.h>
 #include <cppkafka/consumer.h>
 #include "../client/circuit_breaker.hpp"
+#include "../proto/reqmsg.hpp"
 #include "../config/config.hpp"
 
 struct ConsumerConf {
@@ -32,60 +33,68 @@ private:
     void ConsumeLoop(const cppkafka::Queue &queue);
 
 private:
-    std::atomic<bool> IsRunning;
     std::shared_ptr<Config> bigConf;
-    std::vector<cppkafka::Consumer> clients;
-    std::vector<cppkafka::Queue> queues;
+    std::atomic<bool> IsRunning;
+    std::unique_ptr<cppkafka::Consumer> client;
     std::vector<std::thread> threads;
+    static const int NConsumers = 1;
 };
 
 bool KafkaConsumer::Init(const std::shared_ptr<Config> &pConf) {
     bigConf = pConf;
 
-    for (auto &consumerConf : bigConf->Kafka_consumer_list) {
-        cppkafka::Configuration kafkaConf;
+    cppkafka::Configuration kafkaConf;
+    kafkaConf.set("bootstrap.servers", bigConf->Kafka_bootstrap_servers);
+    kafkaConf.set("group.id", bigConf->Kafka_consumer.GroupId);
+    kafkaConf.set("heartbeat.interval.ms", 1000);
+    kafkaConf.set("session.timeout.ms", 30000);
+    kafkaConf.set("auto.offset.reset", "latest");
+    kafkaConf.set("enable.auto.commit", true);
+    kafkaConf.set("auto.commit.interval.ms", 1000);
 
-        kafkaConf.set("bootstrap.servers", bigConf->Kafka_bootstrap_servers);
-        kafkaConf.set("group.id", consumerConf.GroupId);
-        kafkaConf.set("heartbeat.interval.ms", 1000);
-        kafkaConf.set("session.timeout.ms", 30000);
-        kafkaConf.set("auto.offset.reset", "latest");
-        kafkaConf.set("enable.auto.commit", true);
-        kafkaConf.set("auto.commit.interval.ms", 1000);
-
-        cppkafka::Consumer cli(kafkaConf);
-        cli.subscribe(std::vector<std::string>{consumerConf.Topic});
-        cli.set_assignment_callback([&](cppkafka::TopicPartitionList& topicPartitionList) {
-            LOG()
-            cli.assign(topicPartitionList);
-        });
-        cli.set_revocation_callback([&](const cppkafka::TopicPartitionList& topicPartitionList) {
-            cli.unassign();
-        });
-        cli.set_rebalance_error_callback([&](cppkafka::Error error) {
-            LOG(FATAL) << "%% Error: " << error.to_string() << std::endl;
-        });
-
-        queues.push_back(std::move(cli.get_consumer_queue()));
-        clients.push_back(std::move(cli));
-    }
+    client = std::make_unique<cppkafka::Consumer>(kafkaConf);
+    client->subscribe(std::vector<std::string>{bigConf->Kafka_consumer.Topic});
+    client->set_assignment_callback([&](cppkafka::TopicPartitionList& topicPartitionList) {
+        client->assign(topicPartitionList);
+    });
+    client->set_revocation_callback([&](const cppkafka::TopicPartitionList& topicPartitionList) {
+        client->unassign();
+    });
+    client->set_rebalance_error_callback([&](cppkafka::Error error) {
+        LOG(FATAL) << "%% Error: " << error.to_string() << std::endl;
+    });
 
     return true;
 }
 
 void KafkaConsumer::ConsumeLoop(const cppkafka::Queue &queue) {
     while (IsRunning) {
-        auto msg = queue.consume();
+        cppkafka::Message kafkaMsg = queue.consume();
+        if (kafkaMsg.is_eof()) break;
+        RequestMessage reqmsg;
+        if (reqmsg.FromJSON(kafkaMsg.get_payload())) { // Fixme: catch exception
 
+        } else {
+            LOG(ERROR) << "消息格式错误: " << kafkaMsg.get_payload() << std::endl;
+        }
     }
+    LOG(INFO) << "KafkaConsumer::ConsumeLoop exit" << std::endl;
 }
 
 bool KafkaConsumer::Start() {
     IsRunning = true;
-
+    for (int i = 0; i < NConsumers; i++) {
+        threads.emplace_back(std::thread(std::bind(&KafkaConsumer::ConsumeLoop,
+                this, client->get_consumer_queue())));
+    }
+    LOG(INFO) << "KafkaProducer启动成功" << std::endl;
+    return true;
 }
 
 bool KafkaConsumer::Stop() {
     IsRunning = false;
-
+    for (int i = 0; i < NConsumers; i++)
+        threads[i].join();
+    LOG(INFO) << "KafkaProducer关闭成功" << std::endl;
+    return true;
 }

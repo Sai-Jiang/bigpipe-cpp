@@ -27,12 +27,13 @@ bool Acceptor::Stop() {
     IsRunning = false;
     httpServer->stop();
     LOG(INFO) << "HTTP服务器关闭" << std::endl;
+    return true;
 }
 
 bool Acceptor::Start() {
     httpServer->run(1);
-    LOG(INFO) << "HTTP服务器启动" << std::endl;
     IsRunning = true;
+    LOG(INFO) << "HTTP服务器启动" << std::endl;
     return true;
 }
 
@@ -54,4 +55,3 @@ void Acceptor::RpcCallback(served::response &resp, const served::request &req) {
         resp << status.ToJSON();
     }
 }
-

@@ -29,11 +29,11 @@ public:
     void SetHTTPHeaders(std::map<std::string, std::string> headers) { headers = headers; }
 
 public:
-    std::unordered_map<std::string, std::string> GetHTTPHeaders() { return headers; }
-    std::string GetURL() { return url; }
-    std::string GetData() { return data; }
-    std::string GetTopic() { return topic; }
-    std::string GetPartitionKey() { return partitionKey; }
+    std::unordered_map<std::string, std::string> GetHTTPHeaders() const { return headers; }
+    std::string GetURL() const { return url; }
+    std::string GetData() const { return data; }
+    std::string GetTopic() const { return topic; }
+    std::string GetPartitionKey() const { return partitionKey; }
 
 private:
     std::unordered_map<std::string, std::string> headers;

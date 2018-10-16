@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
 
     std::shared_ptr<Config> config = Config::ParseConfig(FLAGS_configFile);
     if (config == nullptr) {
-        LOG(ERROR) <<  "配置文件加载失败:" << FLAGS_configFile << std::endl;
+        LOG(ERROR) <<  "配置文件加载失败: " << FLAGS_configFile << std::endl;
         return -1;
     }
 

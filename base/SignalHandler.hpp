@@ -1,10 +1,14 @@
-#progma once
+#pragma once
 
 #include <csignal>
 #include <glog/logging.h>
+#include <mutex>
+#include <condition_variable>
 
 class SignalHandler {
 public:
+    SignalHandler() = delete;
+
     static void hookSIGINT() {
         ::signal(SIGINT, handleUserInterrupt);
     }
@@ -17,9 +21,9 @@ public:
 
 private:
     static void handleUserInterrupt(int signo) {
-        if (signo == ::SIGINT) {
+        if (signo == SIGINT) {
             LOG(INFO) << "SIGINT trapped ..." << std::endl;
-            _cond.notify_one();
+            cond_.notify_one();
         }
     }
 

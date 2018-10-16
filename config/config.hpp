@@ -30,7 +30,7 @@ public:
     int Kafka_producer_retries;
     std::unordered_map<std::string, AccessControlList> Kafka_producer_acl;
 
-    std::vector<ConsumerConf> Kafka_consumer_list;
+    ConsumerConf Kafka_consumer;
 
     int Http_server_port;
     int Http_server_read_timeout;
@@ -74,35 +74,36 @@ std::unique_ptr<Config> Config::ParseConfig(std::string path) {
             }
         }
 
-        for (auto item : dict["kafka.consumer.list"]) {
-            ConsumerConf consumerConf;
-            consumerConf.Topic = item["topic"].asString();
-            consumerConf.GroupId = item["groupId"].asString();
-            consumerConf.RateLimit = int(item["rateLimit"].asInt());
-            consumerConf.Retries = int(item["retries"].asInt());
-            consumerConf.Timeout = int(item["timeout"].asInt());
-            consumerConf.Concurrency = int(item["concurrency"].asInt());
+        auto item = dict["kafka.consumer"];
 
-            if (item.count("circuitBreaker") > 0) {
-                auto circuitMap = item["circuitBreaker"];
-                consumerConf.CircuiteBreakerConf->RecoverPeriod = int(circuitMap["recoverPeriod"].asDouble());
-                consumerConf.CircuiteBreakerConf->BreakPeriod = int(circuitMap["breakPeriod"].asDouble());
-                consumerConf.CircuiteBreakerConf->WinSize = int(circuitMap["winSize"].asDouble());
-                consumerConf.CircuiteBreakerConf->HealthRate = int(circuitMap["healthRate"].asDouble());
-                consumerConf.CircuiteBreakerConf->MinStats = int(circuitMap["minStats"].asDouble());
-                if (consumerConf.CircuiteBreakerConf->WinSize <= 0 ||
-                        consumerConf.CircuiteBreakerConf->MinStats <= 0 ||
-                        consumerConf.CircuiteBreakerConf->HealthRate <= 0 ||
-                        consumerConf.CircuiteBreakerConf->HealthRate > 100) {
-                    LOG(WARNING) << "consumer配置的熔断器参数有误, 请检查一下." << std::endl;
-                    return std::unique_ptr<Config>(nullptr);
-                }
-            }
-            config->Kafka_consumer_list.push_back(consumerConf);
-            if (config->Kafka_topics.count(consumerConf.Topic) == 0) {
-                LOG(WARNING) << ("consumer中配置的topic: ") << consumerConf.Topic << " 不存在,请检查kafka.topics." << std::endl;
+        config->Kafka_consumer.Topic = item["topic"].asString();
+        config->Kafka_consumer.GroupId = item["groupId"].asString();
+        config->Kafka_consumer.RateLimit = int(item["rateLimit"].asInt());
+        config->Kafka_consumer.Retries = int(item["retries"].asInt());
+        config->Kafka_consumer.Timeout = int(item["timeout"].asInt());
+        config->Kafka_consumer.Concurrency = int(item["concurrency"].asInt());
+
+        if (item.count("circuitBreaker") > 0) {
+            auto circuitMap = item["circuitBreaker"];
+            config->Kafka_consumer.CircuitBreakerConf = std::make_unique<CircuitBreakerConf>();
+            config->Kafka_consumer.CircuitBreakerConf->RecoverPeriod = int(circuitMap["recoverPeriod"].asDouble());
+            config->Kafka_consumer.CircuitBreakerConf->BreakPeriod = int(circuitMap["breakPeriod"].asDouble());
+            config->Kafka_consumer.CircuitBreakerConf->WinSize = int(circuitMap["winSize"].asDouble());
+            config->Kafka_consumer.CircuitBreakerConf->HealthRate = int(circuitMap["healthRate"].asDouble());
+            config->Kafka_consumer.CircuitBreakerConf->MinStats = int(circuitMap["minStats"].asDouble());
+            if (config->Kafka_consumer.CircuitBreakerConf->WinSize <= 0 ||
+                config->Kafka_consumer.CircuitBreakerConf->MinStats <= 0 ||
+                config->Kafka_consumer.CircuitBreakerConf->HealthRate <= 0 ||
+                config->Kafka_consumer.CircuitBreakerConf->HealthRate > 100) {
+                LOG(WARNING) << "consumer配置的熔断器参数有误, 请检查一下." << std::endl;
                 return std::unique_ptr<Config>(nullptr);
             }
+        }
+
+        if (config->Kafka_topics.count(config->Kafka_consumer.Topic) == 0) {
+            LOG(WARNING) << "consumer中配置的topic: " << config->Kafka_consumer.Topic
+                        << " 不存在,请检查kafka.topics." << std::endl;
+            return std::unique_ptr<Config>(nullptr);
         }
     } catch (std::exception & e) {
         LOG(ERROR) << e.what() << std::endl;

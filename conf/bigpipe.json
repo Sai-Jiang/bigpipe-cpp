@@ -13,10 +13,7 @@
     {"name": "system-2", "secret": "you are bad", "topic": "test"}
   ],
 
-  "kafka.consumer.list": [
-    {"topic": "test", "groupId": "G1", "rateLimit": 100, "timeout": 3000, "retries": 2, "concurrency": 5},
-    {"topic": "test", "groupId": "G2", "rateLimit": 100, "timeout": 3000, "retries": 2, "concurrency": 5}
-  ],
+  "kafka.consumer": {"topic": "test", "groupId": "G1", "rateLimit": 100, "timeout": 3000, "retries": 2, "concurrency": 5},
 
   "http.server.port": 10086,
   "http.server.handler.channel.size": 500000,
