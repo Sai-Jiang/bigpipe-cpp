@@ -7,6 +7,7 @@
 #include "rate_limit.h"
 #include "circuit_breaker.hpp"
 #include "../proto/reqmsg.hpp"
+#include "../base/ThreadPool.hpp"
 
 using namespace web;
 using namespace web::http;
@@ -14,22 +15,31 @@ using namespace web::http::client;
 
 class AsyncClient {
 public:
-    AsyncClient(int retries, int timeout) : retries(retries), timeout(timeout) {}
+    AsyncClient(int nWorkers, int retries, int timeout) : workers(new ThreadPool(20, nWorkers)),
+                                                          retries(retries),
+                                                          timeout(timeout) {
+    }
+
+    bool Start() { workers->Start(); }
+    bool Stop() { workers->Stop(); }
+
     bool SetTokenBucket(double rate);
     bool SetCircuitBreaker(const CircuitBreakerConf &conf);
 
 public:
+    void AsyncCall(const RequestMessage &msg);
     void Call(const RequestMessage &msg);
-    void notifyCircuitBreaker(bool success);
 
 private:
     void CallWithRetry(const RequestMessage &msg);
+    void notifyCircuitBreaker(bool success);
 
 private:
     int retries;
     int timeout;
     std::unique_ptr<TokenBucket> rateLimit;
     std::unique_ptr<CircuitBreaker> circuitBreaker;
+    std::unique_ptr<ThreadPool> workers;
 };
 
 bool AsyncClient::SetTokenBucket(double rate) {
@@ -49,7 +59,7 @@ void AsyncClient::CallWithRetry(const RequestMessage &msg) {
         http_client client(msg.GetURL());
 
         http_request request(methods::POST);
-        for (auto head : msg.GetHTTPHeaders())
+        for (auto &head : msg.GetHTTPHeaders())
             request.headers().add(head.first, head.second);
         request.headers().add("Content-Type", "application/octet-stream");
         request.headers().add("Content-Length", std::to_string(msg.GetData().size()));
@@ -65,7 +75,7 @@ void AsyncClient::CallWithRetry(const RequestMessage &msg) {
             notifyCircuitBreaker(false);
             std::ostringstream oss;
             oss << "HTTP调用失败(%" << i << ") (" << reqUsedTimeMS << "ms) " << resp.status_code() << std::endl;
-            LOG(WARNING) << oss.str() << std::endl;
+            LOG(WARNING) << oss.str();
             continue;
         }
 
@@ -73,14 +83,26 @@ void AsyncClient::CallWithRetry(const RequestMessage &msg) {
         notifyCircuitBreaker(true);
         std::ostringstream oss;
         oss << "HTTP调用成功(%" << i << ") (" << reqUsedTimeMS << "ms) " << resp.status_code() << std::endl;
-        LOG(INFO) << oss.str() << std::endl;
+        LOG(INFO) << oss.str();
         break;
     }
 }
 
 void AsyncClient::Call(const RequestMessage &msg) {
+    if (circuitBreaker) {
+        while (circuitBreaker->IsBreak())
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
 
+    assert(rateLimit != nullptr);
     rateLimit->GetToken(1);
+
+    CallWithRetry(msg);
+}
+
+void AsyncClient::AsyncCall(const RequestMessage &msg) {
+    assert(workers->IsStarted());
+    workers->PutTask([&](){ Call(msg); });
 }
 
 void AsyncClient::notifyCircuitBreaker(bool success) {
@@ -92,5 +114,3 @@ void AsyncClient::notifyCircuitBreaker(bool success) {
         }
     }
 }
-
-

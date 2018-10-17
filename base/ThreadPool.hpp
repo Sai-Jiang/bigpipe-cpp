@@ -1,6 +1,5 @@
 #pragma once
 
-#include <glog/logging.h>
 #include <mutex>
 #include <condition_variable>
 #include <queue>
@@ -31,6 +30,10 @@ public:
         queue_.put(task);
     }
 
+    bool IsStarted() const { return IsRunning; }
+
+    size_t PendingTasks() const { return queue_.size(); }
+
 private:
     void RunInLoop();
 
@@ -46,7 +49,6 @@ void ThreadPool::RunInLoop() {
         Task todo = queue_.take();
         if (todo) todo();
     }
-    LOG(INFO) << "ThreadPool::RunInLoop() exit " << std::endl;  // Fixme: thread-safe logging
 }
 
 bool ThreadPool::Start() {

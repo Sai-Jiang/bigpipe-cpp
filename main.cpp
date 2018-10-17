@@ -12,6 +12,7 @@ DEFINE_string(configFile, "./conf/bigpipe.json", "absolute path to bigpipe.json"
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
+    SignalHandler::hookSIGINT();
 
     std::shared_ptr<Config> config = Config::ParseConfig(FLAGS_configFile);
     if (config == nullptr) {
@@ -33,7 +34,6 @@ int main(int argc, char *argv[]) {
     producer.Start();
     acceptor.Start();
 
-    SignalHandler::hookSIGINT();
     SignalHandler::waitForUserInterrupt();
 
     acceptor.Stop();

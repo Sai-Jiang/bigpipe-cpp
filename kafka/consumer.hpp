@@ -9,6 +9,7 @@
 #include "../client/circuit_breaker.hpp"
 #include "../proto/reqmsg.hpp"
 #include "../config/config.hpp"
+#include "../client/async_client.hpp"
 
 struct ConsumerConf {
     std::string Topic;
@@ -37,6 +38,7 @@ private:
     std::atomic<bool> IsRunning;
     std::unique_ptr<cppkafka::Consumer> client;
     std::vector<std::thread> threads;
+    std::unique_ptr<AsyncClient> asyncClient;
     static const int NConsumers = 1;
 };
 
@@ -64,6 +66,9 @@ bool KafkaConsumer::Init(const std::shared_ptr<Config> &pConf) {
         LOG(FATAL) << "%% Error: " << error.to_string() << std::endl;
     });
 
+    asyncClient = std::make_unique<AsyncClient>(bigConf->Kafka_consumer.Concurrency,
+                                                bigConf->Kafka_consumer.Retries,
+                                                bigConf->Kafka_consumer.Timeout);
     return true;
 }
 
@@ -73,7 +78,7 @@ void KafkaConsumer::ConsumeLoop(const cppkafka::Queue &queue) {
         if (kafkaMsg.is_eof()) break;
         RequestMessage reqmsg;
         if (reqmsg.FromJSON(kafkaMsg.get_payload())) { // Fixme: catch exception
-
+            asyncClient->AsyncCall(reqmsg);
         } else {
             LOG(ERROR) << "消息格式错误: " << kafkaMsg.get_payload() << std::endl;
         }
@@ -83,6 +88,7 @@ void KafkaConsumer::ConsumeLoop(const cppkafka::Queue &queue) {
 
 bool KafkaConsumer::Start() {
     IsRunning = true;
+    asyncClient->Start();
     for (int i = 0; i < NConsumers; i++) {
         threads.emplace_back(std::thread(std::bind(&KafkaConsumer::ConsumeLoop,
                 this, client->get_consumer_queue())));
@@ -95,6 +101,7 @@ bool KafkaConsumer::Stop() {
     IsRunning = false;
     for (int i = 0; i < NConsumers; i++)
         threads[i].join();
+    asyncClient->Stop();
     LOG(INFO) << "KafkaProducer关闭成功" << std::endl;
     return true;
 }
